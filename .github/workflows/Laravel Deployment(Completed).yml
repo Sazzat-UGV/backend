@@ -1,0 +1,90 @@
+name: Deploy Laravel Project
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PROJECT_PATH: "/var/www/backend"
+  PM2_QUEUE_APP_NAME: "app-queue"
+  PM2_SCHEDULER_APP_NAME: ""
+  PM2_SOCKET_APP_NAME: ""
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@master
+
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+
+          script: |
+            set -e
+            echo "Deployment started on server..."
+
+            cd ${{ env.PROJECT_PATH }}
+
+            php artisan down || true
+
+            git stash
+            git pull origin main
+            git stash pop
+
+            composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+
+            npm install
+            npm run build
+
+            php artisan storage:link || true
+
+            php artisan migrate --force
+
+            php artisan cache:clear
+            php artisan config:clear
+            php artisan route:clear
+            php artisan view:clear
+
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+
+            if [ -n "${{ env.PM2_QUEUE_APP_NAME }}" ]; then
+              if pm2 list | grep -q "${{ env.PM2_QUEUE_APP_NAME }}"; then
+                echo "Restarting existing queue worker..."
+                pm2 restart "${{ env.PM2_QUEUE_APP_NAME }}"
+              else
+                echo "Starting new queue worker..."
+                pm2 start "php artisan queue:work --sleep=3 --tries=3" --name="${{ env.PM2_QUEUE_APP_NAME }}"
+              fi
+            fi
+
+            if [ -n "${{ env.PM2_SCHEDULER_APP_NAME }}" ]; then
+              if pm2 list | grep -q "${{ env.PM2_SCHEDULER_APP_NAME }}"; then
+                echo "Restarting existing scheduler..."
+                pm2 restart "${{ env.PM2_SCHEDULER_APP_NAME }}"
+              else
+                echo "Starting new scheduler..."
+                pm2 start "php artisan schedule:work" --name="${{ env.PM2_SCHEDULER_APP_NAME }}"
+              fi
+            fi
+
+            if [ -n "${{ env.PM2_SOCKET_APP_NAME }}" ]; then
+              if pm2 list | grep -q "${{ env.PM2_SOCKET_APP_NAME }}"; then
+                echo "Restarting existing socket server..."
+                pm2 restart "${{ env.PM2_SOCKET_APP_NAME }}"
+              else
+                echo "Starting new socket server..."
+                pm2 start "node server.js" --name="${{ env.PM2_SOCKET_APP_NAME }}"
+              fi
+            fi
+
+            php artisan up
+
+            echo "Deployment finished successfully."
