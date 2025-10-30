@@ -86,6 +86,8 @@ jobs:
               fi
             fi
 
+            pm2 save
+
             php artisan up
 
             echo "Deployment finished successfully."
