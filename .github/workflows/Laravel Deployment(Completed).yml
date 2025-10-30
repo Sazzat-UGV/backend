@@ -75,6 +75,7 @@ jobs:
               fi
             fi
 
+
             if [ -n "${{ env.PM2_SOCKET_APP_NAME }}" ]; then
               if pm2 list | grep -q "${{ env.PM2_SOCKET_APP_NAME }}"; then
                 echo "Restarting existing socket server..."
