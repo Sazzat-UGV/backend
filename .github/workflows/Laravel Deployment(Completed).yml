@@ -51,9 +51,9 @@ jobs:
             php artisan route:clear
             php artisan view:clear
 
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
+            # php artisan config:cache
+            # php artisan route:cache
+            # php artisan view:cache
 
             if [ -n "${{ env.PM2_QUEUE_APP_NAME }}" ]; then
               if pm2 list | grep -q "${{ env.PM2_QUEUE_APP_NAME }}"; then
