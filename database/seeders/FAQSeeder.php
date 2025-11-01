@@ -1,35 +1,43 @@
 <?php
+
 namespace Database\Seeders;
 
-use App\Models\FAQ;
+use App\Models\Faq;
 use Illuminate\Database\Seeder;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
-class FAQSeeder extends Seeder
+class FaqSeeder extends Seeder
 {
     /**
      * Run the database seeds.
      */
     public function run(): void
     {
-        $faqs = [
-            'What is MyTSV.com?'                                => 'MyTSV is a video-sharing platform designed for local businesses, professionals, and specialists to showcase their services, talents, and products through video content.',
-            'Who can join MyTSV?'                               => 'Anyone! Whether you’re a business owner, freelancer, artist, or service provider in your local area, MyTSV is for you.',
-            'How do I create an account?'                       => 'Click on the Sign Up button at the top right corner of the homepage and follow the registration process.',
-            'Is there a fee to use MyTSV?'                      => 'Browsing and watching videos is free. We also offer free and premium plans for content creators and businesses.',
-            'How do I upload a video?'                          => 'After logging in, click the Upload Video button on your dashboard and follow the steps.',
-            'Can I like, share, and comment on videos?'         => 'Yes! Users can like, comment, and share videos as well as save them to favorites.',
-            'Are videos moderated?'                             => 'Yes, videos are reviewed for compliance with community guidelines and inappropriate content is removed.',
-            'How can I find local businesses or professionals?' => 'Use our search bar or browse by category or location.',
-            'How are ratings and reviews managed?'              => 'Users can rate videos and leave feedback. Spam and abuse are monitored.',
-            'I forgot my password. What should I do?'           => 'Click the Forgot Password? link on the login page and follow the instructions.',
-            'Can I advertise my business on MyTSV?'             => 'Yes, we offer promoted videos, homepage features, and banner placements. Contact ads@mytsv.com for details.',
-            'How do I contact support?'                         => 'Email support@mytsv.com or use the Contact Us form on our website.',
-        ];
-        foreach ($faqs as $key => $value) {
-            FAQ::create([
-                'question' => $key,
-                'answer'   => $value,
-            ]);
+            $faqs = [
+                [
+                    'question' => 'What is your return policy?',
+                    'answer' => 'Our return policy allows you to return items within 30 days of purchase for a full refund, provided they are in their original condition.'
+                ],
+                [
+                    'question' => 'How can I track my order?',
+                    'answer' => 'You can track your order using the tracking link sent to your email after purchase. Alternatively, log in to your account and check the "My Orders" section.'
+                ],
+                [
+                    'question' => 'Do you offer international shipping?',
+                    'answer' => 'Yes, we ship to most countries worldwide. Shipping costs and delivery times vary by destination.'
+                ],
+                [
+                    'question' => 'What payment methods do you accept?',
+                    'answer' => 'We accept Visa, Mastercard, PayPal, and other major credit/debit cards. For a full list, please check our payment options page.'
+                ],
+                [
+                    'question' => 'How can I contact customer support?',
+                    'answer' => 'You can reach us via email at support@example.com or call us at +123-456-7890. We’re available Monday to Friday, 9 AM to 5 PM.'
+                ],
+            ];
+     
+        foreach ($faqs as $faq) {
+            Faq::create($faq);
         }
     }
 }

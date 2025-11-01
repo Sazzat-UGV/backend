@@ -1,15 +1,14 @@
 <?php
+
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 
-class User extends Authenticatable implements JWTSubject
+class User extends Authenticatable implements MustVerifyEmail
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
     /**
@@ -17,7 +16,7 @@ class User extends Authenticatable implements JWTSubject
      *
      * @var array<int, string>
      */
-    protected $guarded = ['id'];
+    protected $guarded = ["id"];
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -37,42 +36,20 @@ class User extends Authenticatable implements JWTSubject
     {
         return [
             'email_verified_at' => 'datetime',
-            // 'password'          => 'hashed',
+            'password' => 'hashed',
         ];
     }
 
-    public function getJWTIdentifier()
+    /* relationship with role */
+    public function role()
     {
-        return $this->getKey();
+        return $this->belongsTo(Role::class);
     }
 
-    public function getJWTCustomClaims()
+    /*relationship with permissions*/
+    //return either true or false
+    public function haspermission($slug)
     {
-        return [];
-    }
-
-    public function getAvatarAttribute($avatar)
-    {
-        return asset('uploads/user/'.$avatar);
-    }
-    public function getCoverImageAttribute($image)
-    {
-        return asset('uploads/cover/' . $image);
-    }
-    public function getServicesAttribute($value)
-    {
-        return json_decode($value);
-    }
-    public function getLocationsAttribute($value)
-    {
-        return json_decode($value);
-    }
-    public function getPauseWatchHistoryAttribute($value)
-    {
-        return (boolean) $value;
-    }
-    public function videos()
-    {
-        return $this->hasMany(Video::class);
+        return $this->role->permissions()->where('slug', $slug)->first() ? true : false;
     }
 }

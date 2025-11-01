@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
@@ -8,17 +9,20 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class ContactUsMail extends Mailable implements ShouldQueue
+class ContactUsMail extends Mailable
 {
     use Queueable, SerializesModels;
 
     /**
      * Create a new message instance.
      */
-    public $message_data;
-    public function __construct($message_data)
+    public $fullname,$email,$subject,$mail_message;
+    public function __construct($fullname,$email,$subject,$mail_message)
     {
-        $this->message_data = $message_data;
+        $this->fullname=$fullname;
+        $this->email=$email;
+        $this->subject=$subject;
+        $this->mail_message=$mail_message;
     }
 
     /**
@@ -27,7 +31,7 @@ class ContactUsMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'New Contact Message',
+            subject: 'Contact Us Form',
         );
     }
 

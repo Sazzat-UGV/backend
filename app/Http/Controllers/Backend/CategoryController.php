@@ -1,26 +1,24 @@
 <?php
+
 namespace App\Http\Controllers\Backend;
 
 use App\Http\Controllers\Controller;
+use App\Models\Blog;
 use App\Models\Category;
-use Exception;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 
 class CategoryController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request)
+    public function index()
     {
-        $categories = Category::latest('id')->paginate($request->per_page ?? 10);
-        return response()->json([
-            'status'  => true,
-            'message' => 'Category retreived successfully.',
-            'data'    => $categories,
-        ], 200);
+        Gate::authorize('browse-blog-category');
+        $categories = Category::latest('id')->get();
+        return view('backend.pages.category.index', compact('categories'));
     }
 
     /**
@@ -36,24 +34,18 @@ class CategoryController extends Controller
      */
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|unique:categories,name|max:255',
+        Gate::authorize('add-blog-category');
+        $request->validate([
+            'category_name' => 'required|string|unique:categories,name',
         ]);
-        if ($validator->fails()) {
-            $firstError = collect($validator->errors()->all())->first();
-            return response()->json([
-                'message' => $firstError,
-                'errors'  => $validator->errors(),
-            ], 422);
-        }
-        $category = Category::create([
-            'name' => $request->name,
+        Category::create([
+            'name' => $request->category_name,
+            'slug' => Str::slug($request->category_name),
+            'status' => $request->status,
         ]);
-        return response()->json([
-            'status'  => true,
-            'message' => 'Category created successfully.',
-            'data'    => $category,
-        ], 200);
+
+        session()->flash('success', 'Category added successfully.');
+        return response()->json(['success' => true]);
     }
 
     /**
@@ -77,33 +69,18 @@ class CategoryController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        try {
-            $category  = Category::findOrFail($id);
-            $validator = Validator::make($request->all(), [
-                'name' => 'required|string|max:255|unique:categories,name,' . $category->id,
-            ]);
-            if ($validator->fails()) {
-                $firstError = collect($validator->errors()->all())->first();
-                return response()->json([
-                    'message' => $firstError,
-                    'errors'  => $validator->errors(),
-                ], 422);
-            }
-            $category->name = $request->name;
-            $category->save();
-
-            return response()->json([
-                'status'  => true,
-                'message' => 'Category updated successfully.',
-                'data'    => $category,
-            ], 200);
-        } catch (Exception $e) {
-            Log::error('Category updated error: ' . $e->getMessage());
-            return response()->json([
-                'status'  => false,
-                'message' => 'data not found',
-            ]);
-        }
+        Gate::authorize('edit-blog-category');
+        $category = Category::findOrFail($id);
+        $request->validate([
+            'category_name' => 'required|string|unique:categories,name,' . $category->id,
+        ]);
+        $category->update([
+            'name' => $request->category_name,
+            'slug' => Str::slug($request->category_name),
+            'status' => $request->status,
+        ]);
+        session()->flash('success', 'Category updated successfully.');
+        return response()->json(['success' => true]);
     }
 
     /**
@@ -111,21 +88,19 @@ class CategoryController extends Controller
      */
     public function destroy(string $id)
     {
-        try {
-            $category = Category::findOrFail($id);
-            $category->delete();
-
-            return response()->json([
-                'status'  => true,
-                'message' => 'Category deleted successfully.',
-                'data'    => $category,
-            ], 200);
-        } catch (Exception $e) {
-            Log::error('Category deleted error: ' . $e->getMessage());
-            return response()->json([
-                'status'  => false,
-                'message' => 'data not found',
-            ]);
+        Gate::authorize('delete-blog-category');
+        $blogs = Blog::where('category_id', $id)->get();
+        foreach ($blogs as $blog) {
+            if ($blog->photo != 'default_blog.png') {
+                //delete old photo
+                $photo_location = 'public/uploads/blog/';
+                $old_photo_location = $photo_location . $blog->photo;
+                unlink(base_path($old_photo_location));
+            }
         }
+        $blogs = Blog::where('category_id', $id)->delete();
+        $category = Category::findOrFail($id);
+        $category->delete();
+        return redirect()->back()->with('success', "Category deleted successfully.");
     }
 }

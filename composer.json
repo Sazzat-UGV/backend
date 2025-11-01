@@ -1,31 +1,30 @@
 {
-    "$schema": "https://getcomposer.org/schema.json",
     "name": "laravel/laravel",
     "type": "project",
     "description": "The skeleton application for the Laravel framework.",
-    "keywords": [
-        "laravel",
-        "framework"
-    ],
+    "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "intervention/image": "^2.7",
-        "laravel/framework": "^12.0",
-        "laravel/sanctum": "^4.0",
-        "laravel/tinker": "^2.10.1",
-        "php-open-source-saver/jwt-auth": "^2.8",
-        "stripe/stripe-php": "^17.3"
+        "barryvdh/laravel-dompdf": "^3.0",
+        "browner12/helpers": "^3.6",
+        "intervention/image": "^2",
+        "laravel/framework": "^11.9",
+        "laravel/tinker": "^2.9",
+        "maatwebsite/excel": "^3.1",
+        "php-flasher/flasher-laravel": "^2.0",
+        "spatie/laravel-backup": "^9.1",
+        "srmklive/paypal": "~3.0",
+        "stripe/stripe-php": "^16.4"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
-        "laravel/pail": "^1.2.2",
+        "laravel/breeze": "^2.2",
         "laravel/pint": "^1.13",
-        "laravel/sail": "^1.41",
+        "laravel/sail": "^1.26",
         "mockery/mockery": "^1.6",
-        "nunomaduro/collision": "^8.6",
-        "pestphp/pest": "^3.8",
-        "pestphp/pest-plugin-laravel": "^3.2"
+        "nunomaduro/collision": "^8.0",
+        "phpunit/phpunit": "^11.0.1"
     },
     "autoload": {
         "psr-4": {
@@ -54,11 +53,6 @@
             "@php artisan key:generate --ansi",
             "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
             "@php artisan migrate --graceful --ansi"
-        ],
-        "dev": "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"npm run dev\" --names='server,queue,vite'",
-        "test": [
-            "@php artisan config:clear --ansi",
-            "@php artisan test"
         ]
     },
     "extra": {

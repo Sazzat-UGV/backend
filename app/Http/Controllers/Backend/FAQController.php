@@ -1,26 +1,23 @@
 <?php
+
 namespace App\Http\Controllers\Backend;
 
 use App\Http\Controllers\Controller;
-use App\Models\FAQ;
-use Exception;
+use App\Models\Faq;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Gate;
 
-class FAQController extends Controller
+class FaqController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
+
     public function index()
     {
-        $faqs = FAQ::all();
-        return response()->json([
-            'status'  => true,
-            'message' => 'FAQ retreived successfully.',
-            'data'    => $faqs,
-        ], 200);
+        Gate::authorize('browse-faqs');
+        $faqs = Faq::latest('id')->paginate();
+        return view('backend.pages.faq.index', compact('faqs'));
     }
 
     /**
@@ -28,7 +25,8 @@ class FAQController extends Controller
      */
     public function create()
     {
-
+        Gate::authorize('add-faqs');
+        return view('backend.pages.faq.create');
     }
 
     /**
@@ -36,26 +34,16 @@ class FAQController extends Controller
      */
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        Gate::authorize('add-faqs');
+        $request->validate([
             'question' => 'required|string|max:255',
-            'answer'   => 'required|string',
+            'answer' => 'required|string|max:2000',
         ]);
-        if ($validator->fails()) {
-            $firstError = collect($validator->errors()->all())->first();
-            return response()->json([
-                'message' => $firstError,
-                'errors'  => $validator->errors(),
-            ], 422);
-        }
-        $faq = FAQ::create([
+        $faq = Faq::create([
             'question' => $request->question,
-            'answer'   => $request->answer,
+            'answer' => $request->answer,
         ]);
-        return response()->json([
-            'status'  => true,
-            'message' => 'Faq created successfully.',
-            'data'    => $faq,
-        ], 200);
+        return redirect()->route('admin.faqs.index')->with('success', 'Faq added successfully.');
     }
 
     /**
@@ -71,7 +59,9 @@ class FAQController extends Controller
      */
     public function edit(string $id)
     {
-        //
+        Gate::authorize('edit-faqs');
+        $faq = Faq::findOrFail($id);
+        return view('backend.pages.faq.edit', compact('faq'));
     }
 
     /**
@@ -79,35 +69,17 @@ class FAQController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $validator = Validator::make($request->all(), [
+        Gate::authorize('edit-faqs');
+        $faq = Faq::findOrFail($id);
+        $request->validate([
             'question' => 'required|string|max:255',
-            'answer'   => 'required|string',
+            'answer' => 'required|string|max:2000',
         ]);
-        if ($validator->fails()) {
-            $firstError = collect($validator->errors()->all())->first();
-            return response()->json([
-                'message' => $firstError,
-                'errors'  => $validator->errors(),
-            ], 422);
-        }
-        try {
-            $faq           = FAQ::findOrFail($id);
-            $faq->question = $request->question;
-            $faq->answer   = $request->answer;
-            $faq->save();
-
-            return response()->json([
-                'status'  => true,
-                'message' => 'Faq updated successfully.',
-                'data'    => $faq,
-            ], 200);
-        } catch (Exception $e) {
-            Log::error('Faq updated error: ' . $e->getMessage());
-            return response()->json([
-                'status'  => false,
-                'message' => 'data not found',
-            ]);
-        }
+        $faq->update([
+            'question' => $request->question,
+            'answer' => $request->answer,
+        ]);
+        return redirect()->route('admin.faqs.index')->with('success', 'Faq updated successfully.');
     }
 
     /**
@@ -115,21 +87,10 @@ class FAQController extends Controller
      */
     public function destroy(string $id)
     {
-        try {
-            $faq = FAQ::findOrFail($id);
-            $faq->delete();
-
-            return response()->json([
-                'status'  => true,
-                'message' => 'Faq deleted successfully.',
-                'data'    => $faq,
-            ], 200);
-        } catch (Exception $e) {
-            Log::error('Faq deleted error: ' . $e->getMessage());
-            return response()->json([
-                'status'  => false,
-                'message' => 'data not found',
-            ]);
-        }
+        Gate::authorize('delete-faqs');
+        $faq = Faq::findOrFail($id);
+        $faq->delete();
+        return redirect()->route('admin.faqs.index')->with('success', 'Faq deleted successfully.');
     }
+
 }

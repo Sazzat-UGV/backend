@@ -1,6 +1,8 @@
 <?php
 
-use App\Console\Commands\VideoSuspendClear;
-use Illuminate\Support\Facades\Schedule;
+use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Facades\Artisan;
 
-Schedule::command(VideoSuspendClear::class)->daily();
+Artisan::command('inspire', function () {
+    $this->comment(Inspiring::quote());
+})->purpose('Display an inspiring quote')->hourly();

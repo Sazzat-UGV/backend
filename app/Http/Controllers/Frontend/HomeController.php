@@ -1,376 +1,256 @@
 <?php
+
 namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
-use App\Models\Category;
-use App\Models\Video;
+use App\Mail\ContactUsMail;
+use App\Mail\SubscriberVerificationMail;
+use App\Models\Blog;
+use App\Models\Cause;
+use App\Models\CauseDonation;
+use App\Models\Comment;
+use App\Models\Counter;
+use App\Models\Event;
+use App\Models\EventTicket;
+use App\Models\Faq;
+use App\Models\Feature;
+use App\Models\gallery;
+use App\Models\GeneralSetting;
+use App\Models\OtherPage;
+use App\Models\Reply;
+use App\Models\Slider;
+use App\Models\Special;
+use App\Models\Subscriber;
+use App\Models\Testimonial;
+use App\Models\User;
+use App\Models\Volunteer;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Number;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 
 class HomeController extends Controller
 {
-    public function getPromotionalVideo(Request $request)
+    public function homePage()
     {
-        $promotional_videos = Video::with('user:id,channel_name,avatar')->latest('id')->where('is_promoted', 1)->where('visibility', 'Everyone')->where('is_suspend', 0);
-        if ($request->category_id) {
-            $promotional_videos = $promotional_videos->where('category_id', $request->category_id);
-        }
-        if ($request->location) {
-            $promotional_videos = $promotional_videos->where('states', 'LIKE', '%' . $request->location . '%')->orWhere('city', 'LIKE', '%' . $request->location . '%');
-        }
-        $promotional_videos = $promotional_videos->paginate($request->per_page ?? 10);
-
-        $promotional_videos->getCollection()->transform(function ($promotional_video) {
-            $promotional_video->views_count_formated = Number::abbreviate($promotional_video->views);
-            $promotional_video->created_at_format    = $promotional_video->created_at->diffForHumans();
-            return $promotional_video;
-        });
-        return response()->json([
-            'status'  => true,
-            'message' => 'Promotional video retrieved successfully.',
-            'data'    => $promotional_videos,
-        ], 200);
+        $sliders = Slider::latest('id')->get();
+        $special = Special::where('id', 1)->first();
+        $features = Feature::where('status', 1)->get();
+        $causes = Cause::latest('id')->limit(3)->get();
+        $event = Event::latest('id')->limit(4);
+        $counter = Counter::where('id', 1)->first();
+        $blogs = Blog::latest('id')->take(3)->get();
+        return view('frontend.pages.home', compact(
+            'sliders',
+            'special',
+            'features',
+            'blogs',
+            'causes',
+            'counter',
+            'event',
+        ));
     }
 
-    public function getRelatedVideo(Request $request, $id)
+    public function aboutPage()
     {
-        $perPage = $request->per_page ?? 10;
-        // $categoryId = Video::findOrFail($id)->category_id;
-        $categoryId = $id;
-        // Promoted videos
-        $promotedVideos = Video::with('user:id,channel_name,avatar', 'category:id,name')->where('category_id', $categoryId)
-            ->where('visibility', 'Everyone')
-            ->where('is_suspend', 0)
-            ->where('is_promoted', 1)
-            ->latest('id')
-            ->take(10)
-            ->get()
-            ->shuffle()
-            ->take(3);
-        // Latest non-promoted shuffle
-        $nonPromotedVideos = Video::with('user:id,channel_name,avatar', 'category:id,name')->where('category_id', $categoryId)
-            ->where('visibility', 'Everyone')
-            ->where('is_suspend', 0)
-            ->where('is_promoted', 0)
-            ->latest('id')
-            ->get()
-
-            ->shuffle();
-
-        $related_videos = $promotedVideos->concat($nonPromotedVideos);
-        $related_videos = $related_videos->map(function ($video) {
-            $video->views_count_formated = Number::abbreviate($video->views);
-            $video->created_at_format    = $video->created_at->diffForHumans();
-            return $video;
-        });
-
-        $currentPage = LengthAwarePaginator::resolveCurrentPage();
-        $pagedData   = $related_videos->forPage($currentPage, $perPage)->values();
-
-        $paginated = new LengthAwarePaginator(
-            $pagedData,
-            $related_videos->count(),
-            $perPage,
-            $currentPage,
-            ['path' => url()->current()]
-        );
-
-        return response()->json([
-            'status'  => true,
-            'message' => 'Related videos retrieved successfully.',
-            'data'    => $paginated,
-        ], 200);
+        $testimonials = Testimonial::where('status', 1)->latest('id')->limit(3)->get();
+        $special = Special::where('id', 1)->first();
+        $counter = Counter::where('id', 1)->first();
+        return view('frontend.pages.about', compact(
+            'special',
+            'testimonials',
+            'counter',
+        ));
     }
-    public function getPromotedRelatedVideo(Request $request, $id)
+
+    public function faqPage()
     {
-        $perPage = $request->per_page ?? 10;
-        // $categoryId = Video::findOrFail($id)->category_id;
-        $categoryId        = $id;
-        $category          = Category::findOrFail($categoryId);
-        $nonPromotedVideos = Video::with('user:id,channel_name,avatar')->where('category_id', $categoryId)
-            ->where('visibility', 'Everyone')
-            ->where('is_suspend', 0)
-            ->where('is_promoted', 1)
+        $faqs = Faq::latest('id')->get();
+        return view('frontend.pages.faq', compact('faqs'));
+    }
+
+    public function volunteerPage()
+    {
+        $volunteers = Volunteer::paginate(8);
+        return view('frontend.pages.volunteer', compact('volunteers'));
+    }
+
+    public function galleryPage()
+    {
+        $photos = gallery::latest('id')->paginate(9);
+        return view('frontend.pages.gallery', compact('photos'));
+    }
+
+    public function blogPage()
+    {
+        $blogs = Blog::latest('id')->paginate(9);
+        return view('frontend.pages.blog.index', compact('blogs'));
+    }
+
+    public function singleBlogPage($id)
+    {
+        $blog_detail = Blog::with('category')->where('id', $id)->first();
+        $recent_news = Blog::latest('id')->limit(6)->get();
+        $comments = Comment::with(['reply' => function ($query) {
+            $query->where('status', 'Accept');
+        }])
+            ->where('blog_id', $id)
+            ->where('status', 'Accept')
             ->latest('id')
+            ->withCount(['reply as reply_count' => function ($query) {
+                $query->where('status', 'Accept');
+            }])
             ->get();
-
-        $related_videos = $nonPromotedVideos->map(function ($video) {
-            $video->views_count_formated = Number::abbreviate($video->views);
-            $video->created_at_format    = $video->created_at->diffForHumans();
-            return $video;
-        });
-
-        $currentPage = LengthAwarePaginator::resolveCurrentPage();
-        $pagedData   = $related_videos->forPage($currentPage, $perPage)->values();
-
-        $paginated = new LengthAwarePaginator(
-            $pagedData,
-            $related_videos->count(),
-            $perPage,
-            $currentPage,
-            ['path' => url()->current()]
-        );
-
-        return response()->json([
-            'status'  => true,
-            'message' => 'Related videos retrieved successfully.',
-            'data'    => [
-                'category_name' => $category->name,
-                'videos'        => $paginated,
-            ],
-        ], 200);
+        $tags = collect(explode(',', $blog_detail->tags))->unique()->values();
+        return view('frontend.pages.blog.show', compact('blog_detail', 'recent_news', 'tags', 'comments'));
     }
 
-    public function searchVideo(Request $request)
+    public function submitComment(Request $request)
     {
-        $perPage     = $request->per_page ?? 10;
-        $currentPage = $request->page ?? 1;
+        $request->validate([
+            'blog_id' => 'required|numeric',
+            'full_name' => 'required|string',
+            'email' => 'required|email',
+            'comment' => 'required|string',
+        ]);
 
-        $baseQuery = Video::with('user:id,channel_name,avatar')->where('visibility', 'Everyone')
-            ->where('is_suspend', 0);
+        Comment::create([
+            'blog_id' => $request->blog_id,
+            'name' => $request->full_name,
+            'email' => $request->email,
+            'comment' => $request->comment,
+        ]);
+        return redirect()->back()->with('success', "Comment submitted successfully.");
+    }
+    public function submitReply(Request $request)
+    {
+        $request->validate([
+            'comment_id' => 'required|numeric',
+            'full_name' => 'required|string',
+            'email' => 'required|email',
+            'reply' => 'required|string',
+        ]);
 
-        if ($request->category_id) {
-            $baseQuery = $baseQuery->where('category_id', $request->category_id);
-        }
-
-        if ($request->location) {
-            $baseQuery = $baseQuery->where(function ($query) use ($request) {
-                $query->where('city', 'LIKE', '%' . $request->location . '%')
-                    ->orWhere('states', 'LIKE', '%' . $request->location . '%');
-            });
-        }
-
-        // Count totals
-        $totalNonPromoted = (clone $baseQuery)->where('is_promoted', 0)->count();
-        $totalPromoted    = (clone $baseQuery)->where('is_promoted', 1)->count();
-
-        // Get random promoted video on page 1 only
-        $promotedVideo = null;
-        if ($currentPage == 1 && $totalPromoted > 0) {
-            $promotedVideo = (clone $baseQuery)
-                ->where('is_promoted', 1)
-                ->inRandomOrder()
-                ->first();
-        }
-
-        // Adjust per page for non-promoted videos
-        $nonPromotedPerPage = $promotedVideo ? ($perPage - 1) : $perPage;
-
-        // Calculate offset
-        $offset = ($currentPage - 1) * $perPage;
-        if ($promotedVideo && $currentPage == 1) {
-            $offset = 0; // First page manually added promoted video
-        } else if ($promotedVideo) {
-            $offset -= 1;
-        }
-
-        // Get non-promoted videos
-        $nonPromotedVideos = (clone $baseQuery)
-            ->where('is_promoted', 0)
-            ->latest('id')
-            ->offset($offset)
-            ->limit($nonPromotedPerPage)
-            ->get();
-
-        // Merge videos
-        $videos = collect();
-        if ($promotedVideo) {
-            $videos->push($promotedVideo);
-        }
-        $videos = $videos->merge($nonPromotedVideos);
-
-        // Total count for paginator
-        $total = $totalNonPromoted + ($totalPromoted > 0 ? 1 : 0);
-
-        // Create paginator
-        $paginator = new LengthAwarePaginator(
-            $videos,
-            $total,
-            $perPage,
-            $currentPage,
-            ['path' => url()->current()]
-        );
-
-        // Add formatted attributes with map()
-        $mappedVideos = $paginator->getCollection()->map(function ($video) {
-            $video->views_count_formated = Number::abbreviate($video->views);
-            $video->created_at_format    = $video->created_at->diffForHumans();
-            return $video;
-        });
-
-        // Replace collection in paginator
-        $paginator->setCollection($mappedVideos);
-
-        $data = [
-            'category_name' => Category::where('id', $request->category_id)->first()->name ?? null,
-            'videos'        => $paginator,
-        ];
-        // Return response
-        return response()->json([
-            'status'  => true,
-            'message' => 'Search videos retrieved successfully.',
-            'data'    => $data,
-        ], 200);
+        Reply::create([
+            'comment_id' => $request->comment_id,
+            'name' => $request->full_name,
+            'email' => $request->email,
+            'comment' => $request->reply,
+        ]);
+        return redirect()->back()->with('success', "Reply submitted successfully.");
     }
 
-    public function homeVideo(Request $request)
+    public function eventPage()
     {
-        $videoLimit = $request->video_limit ?? 6;
-        $perPage    = $request->input('per_page', 10);
-
-        // Paginate categories
-        $categories = Category::paginate($perPage);
-
-        // Modify each category with videos
-        $categories->getCollection()->transform(function ($category) use ($videoLimit) {
-            $promotedVideo = $category->videos()
-                ->with('user:id,channel_name,avatar')
-                ->where('is_promoted', 1)
-                ->where('visibility', 'Everyone')
-                ->where('is_suspend', 0)
-                ->inRandomOrder()
-                ->first();
-
-            $nonPromotedLimit = $promotedVideo ? ($videoLimit - 1) : $videoLimit;
-
-            $nonPromotedVideos = $category->videos()
-                ->with('user:id,channel_name,avatar')
-                ->where('is_promoted', 0)
-                ->where('visibility', 'Everyone')
-                ->where('is_suspend', 0)
-                ->latest('id')
-                ->limit($nonPromotedLimit)
-                ->get()
-                ->shuffle();
-
-            $videos = collect();
-            if ($promotedVideo) {
-                $videos->push($promotedVideo);
-            }
-            $videos = $videos->merge($nonPromotedVideos);
-
-            $videos = $videos->map(function ($video) {
-                $video->views_count_formated = Number::abbreviate($video->views);
-                $video->created_at_format    = $video->created_at->diffForHumans();
-                return $video;
-            });
-
-            $category->setRelation('videos', $videos);
-
-            return $category;
-        });
-
-            $sortedCategories = $categories->getCollection()->sortByDesc(function ($category) {
-        return $category->videos->count() > 0;
-    })->values();
-
-    // Replace the collection in paginator
-    $categories->setCollection($sortedCategories);
-        return response()->json([
-            'status'  => true,
-            'message' => 'Home page videos retrieved successfully.',
-            'data'    => $categories,
-        ], 200);
+        $events = Event::latest('id')->paginate(4);
+        return view('frontend.pages.event.index', compact('events'));
     }
-    public function allVideo(Request $request)
+
+    public function singleEventPage($slug)
     {
-        $perPage    = $request->input('per_page', 10);
-        $categoryId = $request->input('category_id');
+        $event = Event::where('slug', $slug)->first();
+        $recent_events = $events = Event::latest('id')->limit(5)->select('id', 'name', 'slug')->get();
+        return view('frontend.pages.event.show', compact('event', 'recent_events'));
+    }
 
-        $query = Video::with('user:id,channel_name,avatar')
-            ->latest('id');
+    public function subscribe(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email|unique:subscribers,email',
+        ]);
+        $token = md5(time());
+        Subscriber::create([
+            'email' => $request->email,
+            'token' => $token,
+        ]);
+        $url = Url('subscriber/verify/' . $token . '/' . $request->email);
+        Mail::to($request->email)->send(new SubscriberVerificationMail($url));
+        return redirect()->back()->with('success', 'An email has been sent to you, Please check and verify your email.');
+    }
 
-        if ($categoryId) {
-            $query->where('category_id', $categoryId);
+    public function subscriberVerification($token, $email)
+    {
+        $subscriber = Subscriber::where('email', $email)->where('token', $token)->first();
+        if ($subscriber->status == 1) {
+            return redirect()->route('homePage')->with('warning', 'Email already verified.');
         }
-
-        $videos = $query->paginate($perPage);
-
-        // Format each video in the collection
-        $videos->getCollection()->transform(function ($video) {
-            $video->views_count_formated = Number::abbreviate($video->views);
-            $video->created_at_format    = $video->created_at->diffForHumans();
-            return $video;
-        });
-
-        return response()->json([
-            'status'  => true,
-            'message' => 'All videos retrieved successfully.',
-            'data'    => $videos, // includes pagination meta
-        ], 200);
+        if ($subscriber) {
+            $subscriber->update([
+                'token' => $token,
+                'status' => 1,
+            ]);
+            return redirect()->route('homePage')->with('success', 'Your email has been verified successfully.');
+        } else {
+            return redirect()->route('homePage')->with('error', 'Invalid email or token.');
+        }
     }
 
-    public function promotionalVideoWithLimitation(Request $request)
+    public function privacyPolicy()
     {
-        $videoLimit = $request->video_limit ?? 6;
-
-        $categories = Category::all();
-
-        $categories->map(function ($category) use ($videoLimit) {
-
-            // Get non-promoted videos with eager loaded user
-            $nonPromotedVideos = $category->videos()
-                ->with('user:id,channel_name,avatar')
-                ->where('is_promoted', 1)
-                ->where('visibility', 'Everyone')
-                ->where('is_suspend', 0)
-                ->latest('id')
-                ->limit($videoLimit)
-                ->get()
-                ->shuffle();
-            $videos = $nonPromotedVideos->map(function ($video) {
-                $video->views_count_formated = Number::abbreviate($video->views);
-                $video->created_at_format    = $video->created_at->diffForHumans();
-                return $video;
-            });
-
-            // Attach videos back to category relation
-            $category->setRelation('videos', $videos);
-
-            return $category;
-        });
-
-        return response()->json([
-            'status'  => true,
-            'message' => 'Promotional videos retrieved successfully.',
-            'data'    => $categories,
-        ], 200);
+        $data = OtherPage::where('id', 1)->first();
+        return view('frontend.pages.privacy_policy', compact('data'));
     }
-    public function promotionalVideoWithPagination(Request $request)
+    public function termsCondition()
     {
-        $videoLimit = $request->video_limit ?? 6;
-        $perPage    = $request->input('per_page', 10);
+        $data = OtherPage::where('id', 1)->first();
+        return view('frontend.pages.terms_condition', compact('data'));
+    }
 
-        $categories = Category::paginate($perPage);
+    public function contactPage()
+    {
+        $setting = GeneralSetting::where('id', 1)->first();
+        return view('frontend.pages.contact', compact('setting'));
+    }
 
-        $categories->getCollection()->transform(function ($category) use ($videoLimit) {
-            $promotedVideos = $category->videos()
-                ->with('user:id,channel_name,avatar')
-                ->where('is_promoted', 1)
-                ->where('visibility', 'Everyone')
-                ->where('is_suspend', 0)
-                ->latest('id')
-                ->limit($videoLimit)
-                ->get();
+    public function contactSubmit(Request $request)
+    {
+        $request->validate([
+            'full_name' => 'required|string',
+            'email' => 'required|email',
+            'subject' => 'required|string',
+            'message' => 'required|string',
+        ]);
+        $fullname = $request->full_name;
+        $email = $request->email;
+        $subject = $request->subject;
+        $mail_message = $request->message;
+        $admin_email = User::where('id', 1)->first()->email;
+        Mail::to($admin_email)->send(new ContactUsMail($fullname, $email, $subject, $mail_message));
+        return redirect()->back()->with('success', 'Thanks for your message. We will contact you soon.');
+    }
 
-            // Format each video
-            $promotedVideos = $promotedVideos->map(function ($video) {
-                $video->views_count_formated = Number::abbreviate($video->views);
-                $video->created_at_format    = $video->created_at->diffForHumans();
-                return $video;
-            });
+    public function userEventTicket()
+    {
+        $eventTicket = EventTicket::where('user_id', Auth::user()->id)->where('payment_status', 'COMPLETED')->latest('id')->get();
+        return view('user_dashboard.event.event_ticket', compact('eventTicket'));
+    }
+    public function userEventTicketInvoice($id)
+    {
+        $TicketInvoice = EventTicket::with('user', 'event')->where('id', $id)->first();
+        $billed_to = User::where('id', 1)->first();
+        return view('user_dashboard.event.event_ticket_invoice', compact('TicketInvoice', 'billed_to'));
+    }
 
-            $category->setRelation('videos', $promotedVideos);
+    public function causePage()
+    {
+        $causes = Cause::latest('id')->paginate(6);
+        return view('frontend.pages.cause.index', compact('causes'));
+    }
 
-            return $category;
-        });
-
-        return response()->json([
-            'status'  => true,
-            'message' => 'Promotional videos retrieved successfully.',
-            'data'    => $categories,
-        ], 200);
-
+    public function singleCausePage($slug)
+    {
+        $cause = Cause::where('slug', $slug)->first();
+        $recent_cause = Cause::latest('id')->limit(5)->get();
+        return view('frontend.pages.cause.show', compact('cause', 'recent_cause'));
+    }
+    public function userCauseDonation()
+    {
+        $cause_donation = CauseDonation::where('user_id', Auth::user()->id)->where('payment_status', 'COMPLETED')->latest('id')->get();
+        return view('user_dashboard.cause.cause_donation', compact('cause_donation'));
+    }
+    public function userCauseDonationInvoice($id)
+    {
+        $donationInvoice = CauseDonation::with('user', 'cause')->where('id', $id)->first();
+        $billed_to = User::where('id', 1)->first();
+        return view('user_dashboard.cause.cause_donation_invoice', compact('donationInvoice', 'billed_to'));
     }
 }

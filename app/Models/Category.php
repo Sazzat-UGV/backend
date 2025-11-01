@@ -2,13 +2,11 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Category extends Model
 {
-      protected $guarded=['id'];
-
-      public function videos(){
-        return $this->hasMany(Video::class);
-      }
+    use HasFactory;
+    protected $guarded = ['id'];
 }

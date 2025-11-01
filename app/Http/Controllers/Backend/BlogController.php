@@ -1,26 +1,34 @@
 <?php
+
 namespace App\Http\Controllers\Backend;
 
 use App\Http\Controllers\Controller;
+use App\Mail\SubscriberMail;
 use App\Models\Blog;
-use Exception;
+use App\Models\Category;
+use App\Models\Comment;
+use App\Models\Reply;
+use App\Models\Subscriber;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
+use Image;
 
 class BlogController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request)
+    public function index()
     {
-        $blogs = Blog::latest('id')->paginate($request->per_page ?? 10);
-        return response()->json([
-            'status'  => true,
-            'message' => 'Blog retreived successfully.',
-            'data'    => $blogs,
-        ], 200);
+        Gate::authorize('browse-blog');
+        $blogs = Blog::with(['category'])
+            ->withCount('comments')
+            ->latest('id')
+            ->paginate(10);
+        return view('backend.pages.blog.index', compact('blogs'));
     }
 
     /**
@@ -28,7 +36,9 @@ class BlogController extends Controller
      */
     public function create()
     {
-        //
+        Gate::authorize('add-blog');
+        $categories = Category::latest('id')->get();
+        return view('backend.pages.blog.create', compact('categories'));
     }
 
     /**
@@ -36,33 +46,60 @@ class BlogController extends Controller
      */
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'title'       => 'required|string|max:255',
+        Gate::authorize('add-blog');
+
+        $request->validate([
+            'category' => 'required|numeric',
+            'title' => 'required|string|max:255',
+            'short_description' => 'required|string',
             'description' => 'required|string',
-            'image'       => 'required|mimes:png,jpg,jpeg|max:10240',
+            'photo' => 'required|image|mimes:png,jpg,jpeg|max:10240',
         ]);
-        if ($validator->fails()) {
-            $firstError = collect($validator->errors()->all())->first();
-            return response()->json([
-                'message' => $firstError,
-                'errors'  => $validator->errors(),
-            ], 422);
+
+        $tagsString = '';
+        if ($request->tags) {
+            $tagsArray = json_decode($request->tags, true);
+            $tags = array_map(function ($tag) {
+                return $tag['value'];
+            }, $tagsArray);
+            $tagsString = implode(',', $tags);
         }
-        $blog              = new Blog();
-        $blog->title       = $request->title;
-        $blog->description = $request->description;
-        if ($request->hasFile('image')) {
-            $image      = $request->file('image');
-            $final_name = time() . '.' . $image->getClientOriginalExtension();
-            $image->move(public_path('uploads/blog'), $final_name);
-            $blog->image = $final_name;
+
+        $blog = Blog::create([
+            'category_id' => $request->category,
+            'title' => $request->title,
+            'slug' => Str::slug($request->title),
+            'short_description' => $request->short_description,
+            'description' => $request->description,
+            'tags' => $tagsString,
+        ]);
+
+        $this->image_upload($request, $blog->id);
+        if ($request->send_message_to_subscribers == 1) {
+            $url = url('blog-details/' . $blog->id);
+            $subject = 'New Post Published';
+            $content = "<p style='text-align:center;'>New post has been published. Please visit our website to read the post.</p>
+                        <div style='text-align: center; margin-top: 20px;'>
+                             <a href='{$url}' style='
+                                display: inline-block;
+                                margin-top:10px;
+                                background-color: #4CAF50;
+                                color: #ffffff;
+                                text-decoration: none;
+                                padding: 12px 24px;
+                                border-radius: 5px;
+                                font-size: 16px;
+                                font-weight: bold;'
+                                target='_blank'>
+                                View Post
+                            </a>
+                        </div>";
+            $subscribers = Subscriber::where('status', 1)->select('id', 'email')->get();
+            foreach ($subscribers as $subscriber) {
+                Mail::to($subscriber->email)->send(new SubscriberMail($subject, $content));
+            }
         }
-        $blog->save();
-        return response()->json([
-            'status'  => true,
-            'message' => 'Blog created successfully.',
-            'data'    => $blog,
-        ], 200);
+        return redirect()->route('admin.blog.index')->with('success', 'Blog added successfully.');
     }
 
     /**
@@ -70,20 +107,9 @@ class BlogController extends Controller
      */
     public function show(string $id)
     {
-        try {
-            $blog = Blog::findOrFail($id);
-            return response()->json([
-                'status'  => true,
-                'message' => 'Blog retreived successfully.',
-                'data'    => $blog,
-            ], 200);
-        } catch (Exception $e) {
-            Log::error('Blog retreived error: ' . $e->getMessage());
-            return response()->json([
-                'status'  => false,
-                'message' => 'data not found',
-            ]);
-        }
+        Gate::authorize('read-blog');
+        $blog = Blog::with('category')->findOrFail($id);
+        return view('backend.pages.blog.show', compact('blog'));
     }
 
     /**
@@ -91,7 +117,10 @@ class BlogController extends Controller
      */
     public function edit(string $id)
     {
-        //
+        Gate::authorize('edit-blog');
+        $categories = Category::latest('id')->get();
+        $blog = Blog::with('category')->findOrFail($id);
+        return view('backend.pages.blog.edit', compact('categories', 'blog'));
     }
 
     /**
@@ -99,49 +128,36 @@ class BlogController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $validator = Validator::make($request->all(), [
-            'title'       => 'required|string|max:255',
+        Gate::authorize('edit-blog');
+        $blog = Blog::findOrFail($id);
+        $request->validate([
+            'category' => 'required|numeric',
+            'title' => 'required|string|max:255',
+            'short_description' => 'required|string',
             'description' => 'required|string',
-            'image'       => 'sometimes|mimes:png,jpg,jpeg|max:10240',
+            'photo' => 'sometimes|image|mimes:png,jpg,jpeg|max:10240',
         ]);
-        if ($validator->fails()) {
-            $firstError = collect($validator->errors()->all())->first();
-            return response()->json([
-                'message' => $firstError,
-                'errors'  => $validator->errors(),
-            ], 422);
-        }
-        try {
-            $blog = Blog::findOrFail($id);
-            if ($request->hasFile('image')) {
-                $photo_location     = public_path('uploads/blog');
-                $old_photo          = basename($blog->image);
-                $old_photo_location = $photo_location . '/' . $old_photo;
-                if (! in_array($old_photo, ['blog1.jpg', 'blog2.jpg', 'blog3.jpg', 'blog4.jpg', 'blog5.jpg', 'blog6.jpg', 'blog7.jpg'])) {
-                    if (file_exists($old_photo_location)) {
-                        unlink($old_photo_location);
-                    }
-                }
 
-                $final_photo_name = time() . '.' . $request->image->extension();
-                $request->image->move($photo_location, $final_photo_name);
-                $blog->image = $final_photo_name;
-            }
-            $blog->title       = $request->title;
-            $blog->description = $request->description;
-            $blog->save();
-            return response()->json([
-                'status'  => true,
-                'message' => 'Blog updated successfully',
-                'data'    => $blog,
-            ]);
-        } catch (Exception $e) {
-            Log::error('Blog updated error: ' . $e->getMessage());
-            return response()->json([
-                'status'  => false,
-                'message' => 'data not found',
-            ]);
+        $tagsString = '';
+        if ($request->tags) {
+            $tagsArray = json_decode($request->tags, true);
+            $tags = array_map(function ($tag) {
+                return $tag['value'];
+            }, $tagsArray);
+            $tagsString = implode(',', $tags);
         }
+
+        $blog->update([
+            'category_id' => $request->category,
+            'title' => $request->title,
+            'slug' => Str::slug($request->title),
+            'short_description' => $request->short_description,
+            'description' => $request->description,
+            'tags' => $tagsString,
+        ]);
+
+        $this->image_upload($request, $blog->id);
+        return redirect()->route('admin.blog.index')->with('success', 'Blog updated successfully.');
     }
 
     /**
@@ -149,31 +165,101 @@ class BlogController extends Controller
      */
     public function destroy(string $id)
     {
-        try {
-            $blog = Blog::findOrFail($id);
-            if ($blog) {
-                $photo_location     = public_path('uploads/blog');
-                $old_photo          = basename($blog->image);
-                $old_photo_location = $photo_location . '/' . $old_photo;
-                if (! in_array($old_photo, ['blog1.jpg', 'blog2.jpg', 'blog3.jpg', 'blog4.jpg', 'blog5.jpg', 'blog6.jpg', 'blog7.jpg'])) {
-                    if (file_exists($old_photo_location)) {
-                        unlink($old_photo_location);
-                    }
-                }
-            }
-            $blog->delete();
+        Gate::authorize('delete-blog');
+        $blog = Blog::findOrFail($id);
+        if ($blog->photo != 'default_blog.png') {
+            //delete old photo
+            $photo_location = 'public/uploads/blog/';
+            $old_photo_location = $photo_location . $blog->photo;
+            unlink(base_path($old_photo_location));
+        }
+        $blog->delete();
+        return redirect()->route('admin.blog.index')->with('success', 'Blog deleted successfully.');
+    }
 
-            return response()->json([
-                'status'  => true,
-                'message' => 'Blog deleted successfully.',
-                'data'    => $blog,
-            ], 200);
-        } catch (Exception $e) {
-            Log::error('Blog deleted error: ' . $e->getMessage());
-            return response()->json([
-                'status'  => false,
-                'message' => 'data not found',
+    public function image_upload($request, $blog_id)
+    {
+        $blog = Blog::findOrFail($blog_id);
+        if ($request->hasFile('photo')) {
+            if ($blog->photo != 'default_blog.png') {
+                //delete old photo
+                $photo_location = 'public/uploads/blog/';
+                $old_photo_location = $photo_location . $blog->photo;
+                unlink(base_path($old_photo_location));
+            }
+            $photo_loation = 'public/uploads/blog/';
+            $uploaded_photo = $request->file('photo');
+            $new_photo_name = time() . '.' . $uploaded_photo->getClientOriginalExtension();
+            $new_photo_location = $photo_loation . $new_photo_name;
+            Image::make($uploaded_photo)->save(base_path($new_photo_location));
+            $check = $blog->update([
+                'photo' => $new_photo_name,
             ]);
         }
+    }
+
+    public function browseComment($id)
+    {
+        Gate::authorize('browse-comment');
+        $comments = Comment::withCount('reply')->where('blog_id', $id)->latest('id')->paginate(10);
+        return view('backend.pages.blog.comment', compact('comments'));
+    }
+
+    public function deleteComment($id)
+    {
+        Gate::authorize('delete-comment');
+        $comments = Comment::findOrFail($id)->delete();
+        return redirect()->back()->with('success', 'Comment deleted successfully.');
+    }
+
+    public function commentStatus($id)
+    {
+        Gate::authorize('change-comment-status');
+        $comments = Comment::findOrFail($id);
+        $comments->status = $comments->status == 'Accept' ? 'Pending' : 'Accept';
+        $comments->save();
+        return redirect()->back()->with('success', 'Status changed successfully.');
+    }
+
+    public function replyComment(Request $request)
+    {
+        Gate::authorize('reply-comment');
+        $request->validate([
+            'comment_id' => 'required|numeric',
+            'reply' => 'required|string',
+        ]);
+
+        Reply::create([
+            'comment_id' => $request->comment_id,
+            'name' => Auth::user()->first_name . ' ' . Auth::user()->last_name,
+            'email' => Auth::user()->email,
+            'comment' => $request->reply,
+            'user_type' => 'Admin',
+            'status' => 'Accept',
+        ]);
+        return redirect()->back()->with('success', "Reply submitted successfully.");
+    }
+
+    public function browseReply($id)
+    {
+        Gate::authorize('browse-reply');
+        $replies = Reply::where('comment_id', $id)->latest('id')->paginate(10);
+        return view('backend.pages.blog.reply', compact('replies'));
+    }
+
+    public function replyStatus($id)
+    {
+        Gate::authorize('change-reply-status');
+        $reply = Reply::findOrFail($id);
+        $reply->status = $reply->status == 'Accept' ? 'Pending' : 'Accept';
+        $reply->save();
+        return redirect()->back()->with('success', 'Status changed successfully.');
+    }
+
+    public function deleteReply($id)
+    {
+        Gate::authorize('delete-reply');
+        Reply::findOrFail($id)->delete();
+        return redirect()->back()->with('success', 'Reply deleted successfully.');
     }
 }

@@ -1,106 +1,97 @@
 <?php
+
 namespace App\Http\Controllers\Backend;
 
 use App\Http\Controllers\Controller;
-use App\Models\Transactions;
+use App\Models\Blog;
+use App\Models\Cause;
+use App\Models\CauseDonation;
+use App\Models\Event;
+use App\Models\EventTicket;
+use App\Models\Role;
+use App\Models\Subscriber;
+use App\Models\Testimonial;
 use App\Models\User;
-use App\Models\Video;
-use Carbon\Carbon;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Models\Volunteer;
+use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
-    /**
-     * Handle the incoming request.
-     */
-    public function __invoke(Request $request)
+    public function dashboard()
     {
-        $startOfWeek  = now()->startOfWeek();
-        $endOfWeek    = now()->endOfWeek();
-
-        $days = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"];
-
-        $total_channels = User::where('role', "USER")->count();
-        $total_videos   = Video::count();
-        $total_earnings = Transactions::sum('amount');
-
-        // channel_creating_statistics
-        $data = User::where('role', 'USER')->select(
-            DB::raw('DATE_FORMAT(created_at, "%a") as day'),
-            DB::raw('COUNT(*) as count')
-        )
-            ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-            ->whereYear('created_at', Carbon::now()->year)
-            ->groupBy('day')
-            ->get()
-            ->keyBy('day');
-
-        $channel_creating_statistics = collect();
-
-        foreach ($days as $day) {
-            $count = $data->get($day)->count ?? 0;
-            $channel_creating_statistics->push([
-                'day'   => $day,
-                'count' => $count,
-            ]);
+        if (Auth::user()->hasPermission('developer-dashboard')) {
+            return $this->Developerdashboard();
+        } elseif (Auth::user()->hasPermission('admin-dashboard')) {
+            return $this->Admindashboard();
+        } elseif (Auth::user()->hasPermission('manager-dashboard')) {
+            return $this->Managerdashboard();
+        } else {
+            return $this->Defaultdashboard();
         }
+    }
 
-        // earning_statistics
-        $data = Transactions::select(
-            DB::raw('DATE_FORMAT(created_at, "%a") as day'),
-            DB::raw('SUM(amount) as total')
-        )
-            ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-            ->whereYear('created_at', Carbon::now()->year)
-            ->groupBy('day')
-            ->get()
-            ->keyBy('day');
+    public function Developerdashboard()
+    {
+        $total_user = User::where('role_id', 4)->count();
+        $total_admin = User::whereNotIn('role_id', [1, 4])->count();
+        $role = Role::query();
+        $new_register_users = User::with('role:id,name')->select('id', 'role_id', 'first_name', 'last_name', 'email', 'created_at')->latest('id')->whereNot('id', 1)->limit(5)->get();
 
-        $earning_statistics = collect();
-        $weeklyTotal        = 0;
+        return view('backend.pages.dashboard.developer', compact(
+            'total_user',
+            'total_admin',
+            'role',
+            'new_register_users'
+        ));
+    }
 
-        foreach ($days as $day) {
-            $total = $data->get($day)->total ?? 0;
-
-            $earning_statistics->push([
-                'day'   => $day,
-                'total' => round($total, 2),
-            ]);
-
-            $weeklyTotal += $total;
-        }
-
-        // video_posting_preferences
-        $now         = Carbon::now();
-        $daysInMonth = $now->daysInMonth;
-
-        $counts = DB::table('videos')
-            ->select(DB::raw('DAY(created_at) as day'), DB::raw('COUNT(*) as total_videos'))
-            ->whereMonth('created_at', $now->month)
-            ->whereYear('created_at', $now->year)
-            ->groupBy(DB::raw('DAY(created_at)'))
-            ->pluck('total_videos', 'day');
-
-        $video_posting_preferences = collect(range(1, $daysInMonth))->map(function ($day) use ($counts) {
+    public function Admindashboard()
+    {
+        $total_user = User::where('role_id', 4)->whereNotNull('email_verified_at')->count();
+        $total_cause = Cause::count();
+        $total_event = Event::count();
+        $total_testimonial = Testimonial::count();
+        $total_volunteer = Volunteer::count();
+        $total_subscriber = Subscriber::count();
+        $total_blog = Blog::count();
+        // statistics
+        $monthlyData = collect(range(1, 12))->mapWithKeys(function ($month) {
             return [
-                'day'          => $day,
-                'total_videos' => $counts->get($day, 0),
+                now()->startOfYear()->addMonths($month - 1)->format('F') => [
+                    'tickets' => EventTicket::whereMonth('created_at', $month)->sum('total_price'),
+                    'donations' => CauseDonation::whereMonth('created_at', $month)->sum('amount'),
+                ],
             ];
         });
+        $ticket_booked_amount = EventTicket::sum('total_price');
+        $donation_amount = CauseDonation::sum('amount');
 
-        $data = [
-            'total_channels'              => $total_channels,
-            'total_videos'                => $total_videos,
-            'total_earnings'              => round($total_earnings, 2),
-            'channel_creating_statistics' => $channel_creating_statistics,
-            'earning_statistics'          => $earning_statistics,
-            'video_posting_preferences'   => $video_posting_preferences,
-        ];
-        return response()->json([
-            'status'  => true,
-            'message' => 'Dashboard data retreived successfully.',
-            'data'    => $data,
-        ], 200);
+        $new_register_users = User::with('role:id,name')->select('id', 'role_id', 'first_name', 'last_name', 'email', 'created_at')->latest('id')->whereNotIn('id', [1, 2])->limit(5)->get();
+        return view('backend.pages.dashboard.admin', compact(
+            'total_user',
+            'total_cause',
+            'total_event',
+            'total_blog',
+            'total_volunteer',
+            'total_testimonial',
+            'total_subscriber',
+            'new_register_users',
+            'ticket_booked_amount',
+            'donation_amount',
+            'monthlyData'
+        ));
     }
+
+    public function Managerdashboard()
+    {
+        return view('backend.pages.dashboard.manager');
+    }
+
+    public function Defaultdashboard()
+    {
+        $event_ticket_data = EventTicket::where('user_id', Auth::user()->id)->get();
+        $cause_donation_data = CauseDonation::where('user_id', Auth::user()->id)->get();
+        return view('backend.pages.dashboard.default', compact('event_ticket_data', 'cause_donation_data'));
+    }
+
 }
