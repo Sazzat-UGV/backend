@@ -45,7 +45,7 @@ jobs:
             php artisan storage:link || true
 
             php artisan migrate --force
-            php artisan migrate:fresh --seed
+            # php artisan migrate:fresh --seed
 
             php artisan cache:clear
             php artisan config:clear
