@@ -8,8 +8,8 @@ on:
 env:
   PROJECT_PATH: "/var/www/backend"
   PM2_QUEUE_APP_NAME: "queue"
-  # PM2_SCHEDULER_APP_NAME: ""
-  # PM2_SOCKET_APP_NAME: ""
+  PM2_SCHEDULER_APP_NAME: ""
+  PM2_SOCKET_APP_NAME: ""
 
 jobs:
   deploy:
@@ -65,25 +65,25 @@ jobs:
               fi
             fi
 
-            # if [ -n "${{ env.PM2_SCHEDULER_APP_NAME }}" ]; then
-            #   if pm2 list | grep -q "${{ env.PM2_SCHEDULER_APP_NAME }}"; then
-            #     echo "Restarting existing scheduler..."
-            #     pm2 restart "${{ env.PM2_SCHEDULER_APP_NAME }}"
-            #   else
-            #     echo "Starting new scheduler..."
-            #     pm2 start "php artisan schedule:work" --name="${{ env.PM2_SCHEDULER_APP_NAME }}"
-            #   fi
-            # fi
+            if [ -n "${{ env.PM2_SCHEDULER_APP_NAME }}" ]; then
+              if pm2 list | grep -q "${{ env.PM2_SCHEDULER_APP_NAME }}"; then
+                echo "Restarting existing scheduler..."
+                pm2 restart "${{ env.PM2_SCHEDULER_APP_NAME }}"
+              else
+                echo "Starting new scheduler..."
+                pm2 start "php artisan schedule:work" --name="${{ env.PM2_SCHEDULER_APP_NAME }}"
+              fi
+            fi
 
-            # if [ -n "${{ env.PM2_SOCKET_APP_NAME }}" ]; then
-            #   if pm2 list | grep -q "${{ env.PM2_SOCKET_APP_NAME }}"; then
-            #     echo "Restarting existing socket server..."
-            #     pm2 restart "${{ env.PM2_SOCKET_APP_NAME }}"
-            #   else
-            #     echo "Starting new socket server..."
-            #     pm2 start "node server.js" --name="${{ env.PM2_SOCKET_APP_NAME }}"
-            #   fi
-            # fi
+            if [ -n "${{ env.PM2_SOCKET_APP_NAME }}" ]; then
+              if pm2 list | grep -q "${{ env.PM2_SOCKET_APP_NAME }}"; then
+                echo "Restarting existing socket server..."
+                pm2 restart "${{ env.PM2_SOCKET_APP_NAME }}"
+              else
+                echo "Starting new socket server..."
+                pm2 start "node server.js" --name="${{ env.PM2_SOCKET_APP_NAME }}"
+              fi
+            fi
 
             pm2 save
 
