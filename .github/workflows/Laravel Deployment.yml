@@ -33,7 +33,7 @@ jobs:
 
             # php artisan down || true
 
-            # git stash
+            git stash
             git pull
             # git stash pop
 
