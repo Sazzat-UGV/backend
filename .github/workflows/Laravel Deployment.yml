@@ -7,7 +7,7 @@ on:
 
 env:
   PROJECT_PATH: "/var/www/backend"
-  # PM2_QUEUE_APP_NAME: ""
+  PM2_QUEUE_APP_NAME: "queue"
   # PM2_SCHEDULER_APP_NAME: ""
   # PM2_SOCKET_APP_NAME: ""
 
@@ -35,35 +35,35 @@ jobs:
 
             git stash
             git pull
-            # git stash pop
+            git stash pop
 
-            # composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+            composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
-            # npm install
-            # npm run build
+            npm install
+            npm run build
 
-            # php artisan storage:link || true
+            php artisan storage:link || true
 
-            # php artisan migrate --force
+            php artisan migrate --force
 
-            # php artisan cache:clear
-            # php artisan config:clear
-            # php artisan route:clear
-            # php artisan view:clear
+            php artisan cache:clear
+            php artisan config:clear
+            php artisan route:clear
+            php artisan view:clear
 
-            # php artisan config:cache
-            # php artisan route:cache
-            # php artisan view:cache
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
 
-            # if [ -n "${{ env.PM2_QUEUE_APP_NAME }}" ]; then
-            #   if pm2 list | grep -q "${{ env.PM2_QUEUE_APP_NAME }}"; then
-            #     echo "Restarting existing queue worker..."
-            #     pm2 restart "${{ env.PM2_QUEUE_APP_NAME }}"
-            #   else
-            #     echo "Starting new queue worker..."
-            #     pm2 start "php artisan queue:work --sleep=3 --tries=3" --name="${{ env.PM2_QUEUE_APP_NAME }}"
-            #   fi
-            # fi
+            if [ -n "${{ env.PM2_QUEUE_APP_NAME }}" ]; then
+              if pm2 list | grep -q "${{ env.PM2_QUEUE_APP_NAME }}"; then
+                echo "Restarting existing queue worker..."
+                pm2 restart "${{ env.PM2_QUEUE_APP_NAME }}"
+              else
+                echo "Starting new queue worker..."
+                pm2 start "php artisan queue:work --sleep=3 --tries=3" --name="${{ env.PM2_QUEUE_APP_NAME }}"
+              fi
+            fi
 
             # if [ -n "${{ env.PM2_SCHEDULER_APP_NAME }}" ]; then
             #   if pm2 list | grep -q "${{ env.PM2_SCHEDULER_APP_NAME }}"; then
@@ -85,7 +85,7 @@ jobs:
             #   fi
             # fi
 
-            # pm2 save
+            pm2 save
 
             # php artisan up
 
